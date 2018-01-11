@@ -59,11 +59,10 @@ def pull_screenshot():
     c.screenshot('1.png')
 
 
-def jump(distance):
-    press_time = distance * time_coefficient / 1000
-    print('press time: {}'.format(press_time))
-    s.tap_hold(200, 200, press_time)
-
+def jump(distance):  
+    press_time = distance * time_coefficient * random.uniform(0.999, 1.001) / 1000  
+    print('press time: {}'.format(press_time))  
+    s.tap_hold(200*random.uniform(0.98, 1.02), 200*random.uniform(0.98, 1.02), press_time)  
 
 def backup_screenshot(ts):
     """
@@ -202,7 +201,7 @@ def main():
         save_debug_creenshot(ts, im, piece_x, piece_y, board_x, board_y)
         backup_screenshot(ts)
         # 为了保证截图的时候应落稳了，多延迟一会儿，随机值防 ban
-        time.sleep(random.uniform(1, 1.1))
+        time.sleep(random.uniform(1, 1.9))
 
 
 if __name__ == '__main__':
