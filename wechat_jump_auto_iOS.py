@@ -23,8 +23,11 @@ import random
 import json
 from PIL import Image, ImageDraw
 import wda
+import sys
 
 
+
+'''
 with open('config.json', 'r') as f:
     config = json.load(f)
 
@@ -38,7 +41,9 @@ piece_base_height_1_2 = config['piece_base_height_1_2']
 # 棋子的宽度，比截图中量到的稍微大一点比较安全，可能要调节
 piece_body_width = config['piece_body_width']
 time_coefficient = config['press_coefficient']
+head_diameter = config.get('head_diameter', 60)
 
+    
 # 模拟按压的起始点坐标，需要自动重复游戏请设置成“再来一局”的坐标
 swipe = config.get('swipe', {
     "x1": 320,
@@ -46,9 +51,13 @@ swipe = config.get('swipe', {
     "x2": 320,
     "y2": 410
     })
-
+'''
+under_game_score_y = 200
+piece_base_height_1_2=13
+piece_body_width=47
 c = wda.Client()
 s = c.session()
+
 
 screenshot_backup_dir = 'screenshot_backups/'
 if not os.path.isdir(screenshot_backup_dir):
@@ -59,9 +68,21 @@ def pull_screenshot():
     c.screenshot('1.png')
 
 
-def jump(distance):  
-    press_time = distance * time_coefficient * random.uniform(0.999, 1.001) / 1000  
-    print('press time: {}'.format(press_time))  
+def jump(distance,im):
+    #press_time = distance * time_coefficient * random.uniform(0.9999, 1.0001) / 1000
+    #scale = 0.945 * 2 / head_diameter
+    #actual_distance = distance * scale * (math.sqrt(6) / 2)
+    #press_time = (-945 + math.sqrt(945 ** 2 + 4 * 105 * 36 * actual_distance)) / (2 * 105) * 1000
+    
+    #distanceX = abs(board_x-piece_x) #起点到目标的水平距离
+    press_time=0.0
+    shortEdge = min(im.size) #屏幕宽度
+    #jumpPercent = distance/shortEdge #跳跃百分比
+    jumpFullWidth = 1700 #跳过整个宽度 需要按压的毫秒数
+    press_time =max(round(jumpFullWidth*distance/shortEdge),200.0)/1000 #按压时长
+    
+    print('press time: {}'.format(press_time),distance,shortEdge)
+    
     s.tap_hold(200*random.uniform(0.98, 1.02), 200*random.uniform(0.98, 1.02), press_time)  
 
 def backup_screenshot(ts):
@@ -162,11 +183,15 @@ def find_piece_and_board(im):
                 continue
 
             # 修掉圆顶的时候一条线导致的小 bug，这个颜色判断应该 OK，暂时不提出来
-            if abs(pixel[0] - last_pixel[0]) \
-                    + abs(pixel[1] - last_pixel[1]) \
-                    + abs(pixel[2] - last_pixel[2]) > 10:
-                board_x_sum += j
-                board_x_c += 1
+            if abs(pixel[0] - last_pixel[0]) >=2 :
+                if abs(pixel[1] - last_pixel[1]) >=2:
+                    if abs(pixel[2] - last_pixel[2]) >=2:
+                        if abs(pixel[0] - last_pixel[0]) *abs(pixel[1] - last_pixel[1]) *abs(pixel[2] - last_pixel[2]) > 64 :
+                            #print debug
+                            if debug>0:
+                             print (abs(pixel[0] - last_pixel[0]),abs(pixel[1] - last_pixel[1]),abs(pixel[2] - last_pixel[2]),j)
+                            board_x_sum += j
+                            board_x_c += 1
 
         if board_x_sum:
             board_x = board_x_sum / board_x_c
@@ -181,11 +206,23 @@ def find_piece_and_board(im):
     return piece_x, piece_y, board_x, board_y
 
 
-def main():
+def main(argv):
+    if len(argv)>=2 :
+        im = Image.open("./1.png")
+            
+            # 获取棋子和 board 的位置
+        global debug
+        debug=10
+        piece_x, piece_y, board_x, board_y = find_piece_and_board(im)
+        ts = int(time.time())
+        print(ts, piece_x, piece_y, board_x, board_y)
+        save_debug_creenshot(ts, im, piece_x, piece_y, board_x, board_y)
+        return
+
     while True:
         pull_screenshot()
         im = Image.open("./1.png")
-
+        debug=1
         # 获取棋子和 board 的位置
         piece_x, piece_y, board_x, board_y = find_piece_and_board(im)
         ts = int(time.time())
@@ -193,16 +230,16 @@ def main():
         if piece_x == 0:
             return
 
-        set_button_position(im)
-        distance = math.sqrt(
-            (board_x - piece_x) ** 2 + (board_y - piece_y) ** 2)
-        jump(distance)
+        #set_button_position(im)
+            #distance = math.sqrt((board_x - piece_x) ** 2 + (board_y - piece_y) ** 2)
+        distance=abs(board_x-piece_x)
+        jump(distance,im)
 
         save_debug_creenshot(ts, im, piece_x, piece_y, board_x, board_y)
         backup_screenshot(ts)
         # 为了保证截图的时候应落稳了，多延迟一会儿，随机值防 ban
-        time.sleep(random.uniform(1, 1.9))
+        time.sleep(random.uniform(1, 1.6))
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
