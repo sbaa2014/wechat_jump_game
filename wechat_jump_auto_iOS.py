@@ -54,7 +54,7 @@ swipe = config.get('swipe', {
     "y2": 410
     })
 '''
-under_game_score_y = 200
+under_game_score_y = 250
 piece_base_height_1_2=13
 piece_body_width=47
 
@@ -72,7 +72,7 @@ def pull_screenshot():
     c.screenshot('1.png')
 
 
-def jump(distance,im):
+def jump(distance,im,target):
     #press_time = distance * time_coefficient * random.uniform(0.9999, 1.0001) / 1000
     #scale = 0.945 * 2 / head_diameter
     #actual_distance = distance * scale * (math.sqrt(6) / 2)
@@ -84,8 +84,10 @@ def jump(distance,im):
     #jumpPercent = distance/shortEdge #跳跃百分比
     jumpFullWidth = 1700 #跳过整个宽度 需要按压的毫秒数
     press_time =max(round(jumpFullWidth*distance/shortEdge),200.0)/1000 #按压时长
-    
     print('press time: {}'.format(press_time),distance,shortEdge)
+    if random.uniform(0,1)>0.2 :
+        press_time =press_time+random.uniform(-1,1)*(target-20)/1500
+        print('press real time: {}'.format(press_time),distance,shortEdge)
     
     s.tap_hold(200*random.uniform(0.98, 1.02), 200*random.uniform(0.98, 1.02), press_time)  
 
@@ -129,7 +131,7 @@ def set_button_position(im):
 
 def find_piece_and_board(im,num_ex,ts):
     w, h = im.size
-    
+    piece_body_width2=int(piece_body_width*w/750)
     print("size: {}, {}".format(w, h))
     draw = ImageDraw.Draw(im)
     piece_x_sum = piece_x_c = piece_y_max = 0
@@ -171,16 +173,16 @@ def find_piece_and_board(im,num_ex,ts):
                 piece_y_max = max(i, piece_y_max)
 
     if not all((piece_x_sum, piece_x_c)):
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0,0
     piece_x = piece_x_sum / piece_x_c
     piece_y = piece_y_max - piece_base_height_1_2  # 上移棋子底盘高度的一半
     if piece_x < w/2:
-            start_idx = piece_x+(piece_body_width+1)/2
+            start_idx = piece_x+int(piece_body_width2+1)/2
             end_idx = w
             idx = -1
     else:
             start_idx = 0
-            end_idx = piece_x-(piece_body_width+1)/2
+            end_idx = piece_x-int(piece_body_width2+1)/2
             idx = 0
 
     # find board location
@@ -193,9 +195,23 @@ def find_piece_and_board(im,num_ex,ts):
                 indices = np.where(edged[i, :] != 0)[0]
                 board_x = int(round((indices[0]+indices[-1])/2)) + start_idx
                 break
-
-    board_y = piece_y - abs(board_x - piece_x) * math.sqrt(3) / 3
-    return piece_x, piece_y, board_x, board_y
+    width = -1
+    for j in range(i+2, i+274, 5):
+        indices = np.where(edged[j, :] != 0)[0] + start_idx
+        if not len(indices):
+            continue
+        if abs((indices[0] + indices[-1])/2 - board_x) <= 5: ##
+            if abs(indices[idx] - board_x) <= width: ##
+                board_y = j+under_game_score_y+100
+                break
+            else:
+                width = abs(indices[idx] - board_x)
+        else:
+            board_y = j+under_game_score_y+100
+            break
+    #board_y = piece_y - abs(board_x - piece_x) * math.sqrt(3) / 3
+    target=(board_y-i-under_game_score_y-100)*piece_body_width/piece_body_width2
+    return piece_x, piece_y, board_x, board_y,target
 
 '''
     board_x_sum = 0
@@ -363,7 +379,7 @@ def main(argv):
         global debug
         debug=10
         ts = int(time.time())
-        piece_x, piece_y, board_x, board_y = find_piece_and_board(im,int(argv[1]),ts)
+        piece_x, piece_y, board_x, board_y,target = find_piece_and_board(im,int(argv[1]),ts)
         
         print(ts, piece_x, piece_y, board_x, board_y)
         save_debug_creenshot(ts, im, piece_x, piece_y, board_x, board_y)
@@ -376,24 +392,24 @@ def main(argv):
         debug=1
         # 获取棋子和 board 的位置
         ts = int(time.time())
-        piece_x, piece_y, board_x, board_y = find_piece_and_board(im,5,ts)
+        piece_x, piece_y, board_x, board_y,target = find_piece_and_board(im,5,ts)
         
-        print("M1",ts, piece_x, piece_y, board_x, board_y)
-        piece_x2, piece_y2, board_x2, board_y2 = find_piece_and_board2(im,3,ts)
+        print("M1",ts, piece_x, piece_y, board_x, board_y,target)
+        #piece_x2, piece_y2, board_x2, board_y2 = find_piece_and_board2(im,3,ts)
         
-        print("M2",ts, piece_x2, piece_y2, board_x2, board_y2)
+        #print("M2",ts, piece_x2, piece_y2, board_x2, board_y2)
 
 
         if piece_x == 0:
             return
         
         #set_button_position(im)
-            #distance = math.sqrt((board_x - piece_x) ** 2 + (board_y - piece_y) ** 2)
-        if abs(board_x-board_x2)<4 :
-                board_x=round(board_x2+board_x)/2
-        distance=abs(board_x-piece_x)
-        print("jump",ts, piece_x, piece_y, board_x, board_y)
-        jump(distance,im)
+        distance = math.sqrt((board_x - piece_x) ** 2 + (board_y - piece_y) ** 2)*math.sqrt(3) /2
+            #if abs(board_x-board_x2)<4 :
+            #      board_x=round(board_x2+board_x)/2
+        #distance=abs(board_x-piece_x)
+        #print("jump",ts, piece_x, piece_y, board_x, board_y)
+        jump(distance,im,target)
         backup_screenshot(ts)
         save_debug_creenshot(ts, im, piece_x, piece_y, board_x, board_y)
         
